@@ -165,13 +165,23 @@ jobs:
       # ---------------------------
       # Apply Policy
       # ---------------------------
-      - name: Apply API Policy
+      - name: Apply API Policy (FIX REAL FINAL)
         run: |
+          set -e
+
+          POLICY_XML=$(sed 's/"/\\"/g' policies/cardops-policy.xml | tr -d '\n')
+
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/policies/policy?api-version=2022-08-01" \
-            --headers "Content-Type=application/vnd.ms-azure-apim.policy+xml" \
+            --headers "Content-Type=application/json" \
             --headers "If-Match=*" \
-            --body "@policies/cardops-policy.xml"
+            --body "{
+              \"properties\": {
+                \"value\": \"$POLICY_XML\",
+                \"format\": \"rawxml\"
+              }
+            }"
+      
       
       
       
