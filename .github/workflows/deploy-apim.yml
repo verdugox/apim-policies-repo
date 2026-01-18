@@ -33,6 +33,10 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
+      - name: Fix Azure CLI AKS api-version bug
+        run: |
+          az extension remove --name aks-preview || true
+
       - name: Get AKS credentials
         run: |
           az aks get-credentials \
@@ -41,11 +45,11 @@ jobs:
             --overwrite-existing
 
       - name: Get Ingress Public IP
-        id: ingress
         run: |
+          set -e
           IP=$(kubectl get ingress "$INGRESS_NAME" -n "$INGRESS_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-          echo "Ingress IP: $IP"
           echo "INGRESS_IP=$IP" >> $GITHUB_ENV
+          echo "Ingress IP => $IP"
 
       - name: Resolve Subscription ID
         run: |
@@ -54,9 +58,8 @@ jobs:
 
       - name: Create/Update APIM Backend (aks-ingress-backend)
         run: |
+          set -e
           BACKEND_URL="http://$INGRESS_IP"
-          echo "Backend URL => $BACKEND_URL"
-
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/backends/aks-ingress-backend?api-version=2022-08-01" \
             --body "{
@@ -66,15 +69,17 @@ jobs:
               }
             }"
 
-      - name: Create/Update APIM API from file
+      - name: Create/Update APIM API
         run: |
-          BODY=$(cat apis/cardops-api.json | tr -d '\n' | sed 's/"/\\"/g')
+          set -e
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID?api-version=2022-08-01" \
-            --body "$(cat apis/cardops-api.json)"
+            --headers "Content-Type=application/json" \
+            --body "@apis/cardops-api.json"
 
-      - name: Create/Update Operation - Create Transaction (POST /api/transactions)
+      - name: Create/Update Operation - Create Transaction
         run: |
+          set -e
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/operations/create-transaction?api-version=2022-08-01" \
             --body "{
@@ -82,16 +87,13 @@ jobs:
                 \"displayName\": \"Create Transaction\",
                 \"method\": \"POST\",
                 \"urlTemplate\": \"/api/transactions\",
-                \"request\": {
-                  \"queryParameters\": [],
-                  \"headers\": []
-                },
                 \"responses\": []
               }
             }"
 
-      - name: Create/Update Operation - Health (GET /actuator/health)
+      - name: Create/Update Operation - Health
         run: |
+          set -e
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/operations/health?api-version=2022-08-01" \
             --body "{
@@ -99,16 +101,13 @@ jobs:
                 \"displayName\": \"Health\",
                 \"method\": \"GET\",
                 \"urlTemplate\": \"/actuator/health\",
-                \"request\": {
-                  \"queryParameters\": [],
-                  \"headers\": []
-                },
                 \"responses\": []
               }
             }"
 
-      - name: Apply API Policy (XML)
+      - name: Apply API Policy
         run: |
+          set -e
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/policies/policy?api-version=2022-08-01" \
             --headers "Content-Type=application/vnd.ms-azure-apim.policy+xml" \
@@ -118,8 +117,8 @@ jobs:
         run: |
           echo "===================================="
           echo "APIM deployed OK ✅"
-          echo "Gateway base: https://$APIM_NAME.azure-api.net/$APIM_API_PATH"
-          echo "POST: /api/transactions"
-          echo "GET : /actuator/health"
+          echo "Gateway: https://$APIM_NAME.azure-api.net/$APIM_API_PATH"
+          echo "POST /api/transactions"
+          echo "GET  /actuator/health"
           echo "Backend => http://$INGRESS_IP"
           echo "===================================="
