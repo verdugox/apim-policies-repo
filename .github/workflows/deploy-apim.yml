@@ -14,13 +14,13 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      AZ_RESOURCE_GROUP: ${{ vars.AZ_RESOURCE_GROUP }}
-      AKS_NAME: ${{ vars.AKS_NAME }}
-      APIM_NAME: ${{ vars.APIM_NAME }}
-      APIM_API_ID: ${{ vars.APIM_API_ID }}
-      APIM_API_PATH: ${{ vars.APIM_API_PATH }}
-      INGRESS_NAME: ${{ vars.INGRESS_NAME }}
-      INGRESS_NAMESPACE: ${{ vars.INGRESS_NAMESPACE }}
+      AZ_RESOURCE_GROUP: ${{ secrets.AZ_RESOURCE_GROUP }}
+      AKS_NAME: ${{ secrets.AKS_NAME }}
+      APIM_NAME: ${{ secrets.APIM_NAME }}
+      APIM_API_ID: ${{ secrets.APIM_API_ID }}
+      APIM_API_PATH: ${{ secrets.APIM_API_PATH }}
+      INGRESS_NAME: ${{ secrets.INGRESS_NAME }}
+      INGRESS_NAMESPACE: ${{ secrets.INGRESS_NAMESPACE }}
 
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +36,13 @@ jobs:
       # ---------------------------
       # Resolve Subscription
       # ---------------------------
+      - name: Debug env vars
+        run: |
+          echo "RG=$AZ_RESOURCE_GROUP"
+          echo "AKS=$AKS_NAME"
+          echo "APIM=$APIM_NAME"
+
+
       - name: Resolve Subscription ID
         run: |
           SUBSCRIPTION_ID=$(az account show --query id -o tsv)
