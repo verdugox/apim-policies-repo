@@ -154,13 +154,35 @@ jobs:
               }
             }"
 
+      - name: Create/Update Operation - List Transactions
+        run: |
+          az rest --method PUT \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/operations/list-transactions?api-version=2022-08-01" \
+            --body "{
+              \"properties\": {
+                \"displayName\": \"List Transactions\",
+                \"method\": \"GET\",
+                \"urlTemplate\": \"/api/transactions\",
+                \"request\": {
+                  \"queryParameters\": [
+                    {
+                      \"name\": \"accountNumber\",
+                      \"required\": true,
+                      \"type\": \"string\"
+                    }
+                  ]
+                },
+                \"responses\": []
+              }
+            }"
 
+
+      # ---------------------------
       - name: Debug policy file
         run: |
           echo "====== POLICY FILE ======"
           cat policies/cardops-policy.xml
           echo "========================="
-
 
       # ---------------------------
       # Apply Policy
