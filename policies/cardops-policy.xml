@@ -1,9 +1,10 @@
 <policies>
     <inbound>
         <base />
+
         <rate-limit calls="100" renewal-period="60" />
 
-        <!-- SOLO para POST -->
+        <!-- SOLO reescribe para POST -->
         <choose>
             <when condition="@(context.Request.Method == 'POST')">
                 <rewrite-uri template="/api/transactions" />
