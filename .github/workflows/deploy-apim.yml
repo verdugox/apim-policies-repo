@@ -25,41 +25,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ---------------------------
+      # Azure Auth
+      # ---------------------------
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Fix Azure CLI AKS api-version bug
-        run: |
-          az extension remove --name aks-preview || true
-
-      - name: Get AKS credentials
-        run: |
-          az aks get-credentials \
-            --resource-group "$AZ_RESOURCE_GROUP" \
-            --name "$AKS_NAME" \
-            --overwrite-existing
-
-      - name: Get Ingress Public IP
-        run: |
-          set -e
-          IP=$(kubectl get ingress "$INGRESS_NAME" -n "$INGRESS_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-          echo "INGRESS_IP=$IP" >> $GITHUB_ENV
-          echo "Ingress IP => $IP"
-
+      # ---------------------------
+      # Resolve Subscription
+      # ---------------------------
       - name: Resolve Subscription ID
         run: |
           SUBSCRIPTION_ID=$(az account show --query id -o tsv)
           echo "SUBSCRIPTION_ID=$SUBSCRIPTION_ID" >> $GITHUB_ENV
 
+      # ---------------------------
+      # Get kubeconfig via REST (NO az aks get-credentials)
+      # ---------------------------
+      - name: Get AKS kubeconfig (stable REST)
+        run: |
+          az rest \
+            --method POST \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ContainerService/managedClusters/$AKS_NAME/listClusterUserCredential?api-version=2024-11-01" \
+            --query "kubeconfigs[0].value" -o tsv | base64 --decode > kubeconfig
+
+          echo "KUBECONFIG=$PWD/kubeconfig" >> $GITHUB_ENV
+          kubectl get nodes
+
+      # ---------------------------
+      # Get Ingress Public IP
+      # ---------------------------
+      - name: Get Ingress Public IP
+        run: |
+          IP=$(kubectl get ingress "$INGRESS_NAME" -n "$INGRESS_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "INGRESS_IP=$IP" >> $GITHUB_ENV
+          echo "Ingress IP => $IP"
+
+      # ---------------------------
+      # Create / Update APIM Backend
+      # ---------------------------
       - name: Create/Update APIM Backend (aks-ingress-backend)
         run: |
-          set -e
           BACKEND_URL="http://$INGRESS_IP"
+
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/backends/aks-ingress-backend?api-version=2022-08-01" \
             --body "{
@@ -69,17 +79,21 @@ jobs:
               }
             }"
 
+      # ---------------------------
+      # Create / Update API
+      # ---------------------------
       - name: Create/Update APIM API
         run: |
-          set -e
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID?api-version=2022-08-01" \
             --headers "Content-Type=application/json" \
             --body "@apis/cardops-api.json"
 
+      # ---------------------------
+      # Operations
+      # ---------------------------
       - name: Create/Update Operation - Create Transaction
         run: |
-          set -e
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/operations/create-transaction?api-version=2022-08-01" \
             --body "{
@@ -93,7 +107,6 @@ jobs:
 
       - name: Create/Update Operation - Health
         run: |
-          set -e
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/operations/health?api-version=2022-08-01" \
             --body "{
@@ -105,14 +118,19 @@ jobs:
               }
             }"
 
+      # ---------------------------
+      # Apply Policy
+      # ---------------------------
       - name: Apply API Policy
         run: |
-          set -e
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/policies/policy?api-version=2022-08-01" \
             --headers "Content-Type=application/vnd.ms-azure-apim.policy+xml" \
             --body "@policies/cardops-policy.xml"
 
+      # ---------------------------
+      # Done
+      # ---------------------------
       - name: Done
         run: |
           echo "===================================="
