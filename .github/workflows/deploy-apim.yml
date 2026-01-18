@@ -44,15 +44,23 @@ jobs:
       # ---------------------------
       # Get kubeconfig via REST (NO az aks get-credentials)
       # ---------------------------
-      - name: Get AKS kubeconfig (stable REST)
+      - name: Get AKS kubeconfig via REST (FIX REAL)
         run: |
+          set -e
+
+          echo "RG=$AZ_RESOURCE_GROUP"
+          echo "AKS=$AKS_NAME"
+          echo "SUB=$SUBSCRIPTION_ID"
+
           az rest \
             --method POST \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ContainerService/managedClusters/$AKS_NAME/listClusterUserCredential?api-version=2024-11-01" \
-            --query "kubeconfigs[0].value" -o tsv | base64 --decode > kubeconfig
+            --query "kubeconfigs[0].value" \
+            -o tsv | base64 --decode > kubeconfig
 
-          echo "KUBECONFIG=$PWD/kubeconfig" >> $GITHUB_ENV
+          export KUBECONFIG=$PWD/kubeconfig
           kubectl get nodes
+      
 
       # ---------------------------
       # Get Ingress Public IP
