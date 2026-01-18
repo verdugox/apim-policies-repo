@@ -2,7 +2,14 @@
     <inbound>
         <base />
         <rate-limit calls="100" renewal-period="60" />
-        <rewrite-uri template="/api/transactions" />
+
+        <!-- SOLO para POST -->
+        <choose>
+            <when condition="@(context.Request.Method == 'POST')">
+                <rewrite-uri template="/api/transactions" />
+            </when>
+        </choose>
+
         <set-backend-service backend-id="aks-ingress-backend" />
     </inbound>
 
