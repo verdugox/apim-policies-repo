@@ -33,6 +33,11 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Register required Azure providers
+        run: |
+          az provider register --namespace Microsoft.ContainerService --wait
+          az provider register --namespace Microsoft.ApiManagement --wait
+
       # ---------------------------
       # Resolve Subscription
       # ---------------------------
@@ -51,22 +56,19 @@ jobs:
       # ---------------------------
       # Get kubeconfig via REST (NO az aks get-credentials)
       # ---------------------------
-      - name: Get AKS kubeconfig via REST (FIX REAL)
+      - name: Get AKS kubeconfig via REST (CORRECT)
         run: |
           set -e
 
-          echo "RG=$AZ_RESOURCE_GROUP"
-          echo "AKS=$AKS_NAME"
-          echo "SUB=$SUBSCRIPTION_ID"
-
           az rest \
             --method POST \
-            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ContainerService/managedClusters/$AKS_NAME/listClusterUserCredential?api-version=2024-11-01" \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ContainerService/managedClusters/$AKS_NAME/listClusterUserCredential?api-version=2023-07-01" \
             --query "kubeconfigs[0].value" \
             -o tsv | base64 --decode > kubeconfig
 
           export KUBECONFIG=$PWD/kubeconfig
           kubectl get nodes
+      
       
 
       # ---------------------------
