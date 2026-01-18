@@ -154,6 +154,14 @@ jobs:
               }
             }"
 
+
+      - name: Debug policy file
+        run: |
+          echo "====== POLICY FILE ======"
+          cat policies/cardops-policy.xml
+          echo "========================="
+
+
       # ---------------------------
       # Apply Policy
       # ---------------------------

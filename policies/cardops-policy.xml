@@ -1,13 +1,8 @@
 <policies>
     <inbound>
         <base />
-
         <rate-limit calls="100" renewal-period="60" />
-
-        <!-- Elimina /cardops y deja el path que espera el backend -->
         <rewrite-uri template="/api/transactions" />
-
-        <!-- Backend = Ingress de AKS -->
         <set-backend-service backend-id="aks-ingress-backend" />
     </inbound>
 
