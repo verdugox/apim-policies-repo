@@ -1,0 +1,125 @@
+name: deploy-apim
+
+on:
+  push:
+    branches: [ "develop" ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-apim-develop
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AZ_RESOURCE_GROUP: ${{ vars.AZ_RESOURCE_GROUP }}
+      AKS_NAME: ${{ vars.AKS_NAME }}
+      APIM_NAME: ${{ vars.APIM_NAME }}
+      APIM_API_ID: ${{ vars.APIM_API_ID }}
+      APIM_API_PATH: ${{ vars.APIM_API_PATH }}
+      INGRESS_NAME: ${{ vars.INGRESS_NAME }}
+      INGRESS_NAMESPACE: ${{ vars.INGRESS_NAMESPACE }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group "$AZ_RESOURCE_GROUP" \
+            --name "$AKS_NAME" \
+            --overwrite-existing
+
+      - name: Get Ingress Public IP
+        id: ingress
+        run: |
+          IP=$(kubectl get ingress "$INGRESS_NAME" -n "$INGRESS_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Ingress IP: $IP"
+          echo "INGRESS_IP=$IP" >> $GITHUB_ENV
+
+      - name: Resolve Subscription ID
+        run: |
+          SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+          echo "SUBSCRIPTION_ID=$SUBSCRIPTION_ID" >> $GITHUB_ENV
+
+      - name: Create/Update APIM Backend (aks-ingress-backend)
+        run: |
+          BACKEND_URL="http://$INGRESS_IP"
+          echo "Backend URL => $BACKEND_URL"
+
+          az rest --method PUT \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/backends/aks-ingress-backend?api-version=2022-08-01" \
+            --body "{
+              \"properties\": {
+                \"url\": \"$BACKEND_URL\",
+                \"protocol\": \"http\"
+              }
+            }"
+
+      - name: Create/Update APIM API from file
+        run: |
+          BODY=$(cat apis/cardops-api.json | tr -d '\n' | sed 's/"/\\"/g')
+          az rest --method PUT \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID?api-version=2022-08-01" \
+            --body "$(cat apis/cardops-api.json)"
+
+      - name: Create/Update Operation - Create Transaction (POST /api/transactions)
+        run: |
+          az rest --method PUT \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/operations/create-transaction?api-version=2022-08-01" \
+            --body "{
+              \"properties\": {
+                \"displayName\": \"Create Transaction\",
+                \"method\": \"POST\",
+                \"urlTemplate\": \"/api/transactions\",
+                \"request\": {
+                  \"queryParameters\": [],
+                  \"headers\": []
+                },
+                \"responses\": []
+              }
+            }"
+
+      - name: Create/Update Operation - Health (GET /actuator/health)
+        run: |
+          az rest --method PUT \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/operations/health?api-version=2022-08-01" \
+            --body "{
+              \"properties\": {
+                \"displayName\": \"Health\",
+                \"method\": \"GET\",
+                \"urlTemplate\": \"/actuator/health\",
+                \"request\": {
+                  \"queryParameters\": [],
+                  \"headers\": []
+                },
+                \"responses\": []
+              }
+            }"
+
+      - name: Apply API Policy (XML)
+        run: |
+          az rest --method PUT \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/policies/policy?api-version=2022-08-01" \
+            --headers "Content-Type=application/vnd.ms-azure-apim.policy+xml" \
+            --body "@policies/cardops-policy.xml"
+
+      - name: Done
+        run: |
+          echo "===================================="
+          echo "APIM deployed OK ✅"
+          echo "Gateway base: https://$APIM_NAME.azure-api.net/$APIM_API_PATH"
+          echo "POST: /api/transactions"
+          echo "GET : /actuator/health"
+          echo "Backend => http://$INGRESS_IP"
+          echo "===================================="

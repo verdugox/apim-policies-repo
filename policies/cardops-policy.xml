@@ -1,0 +1,26 @@
+<policies>
+    <inbound>
+        <base />
+
+        <!-- Opcional: rate limit -->
+        <rate-limit calls="100" renewal-period="60" />
+
+        <!-- 🔥 CLAVE: eliminar /cardops del path -->
+        <rewrite-uri template="/api/transactions" />
+
+        <!-- Backend = Ingress de AKS -->
+        <set-backend-service backend-id="aks-ingress-backend" />
+    </inbound>
+
+    <backend>
+        <base />
+    </backend>
+
+    <outbound>
+        <base />
+    </outbound>
+
+    <on-error>
+        <base />
+    </on-error>
+</policies>
