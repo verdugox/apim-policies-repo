@@ -66,8 +66,9 @@ jobs:
             --query "kubeconfigs[0].value" \
             -o tsv | base64 --decode > kubeconfig
 
-          export KUBECONFIG=$PWD/kubeconfig
+          echo "KUBECONFIG=$PWD/kubeconfig" >> $GITHUB_ENV
           kubectl get nodes
+      
       
       
 
@@ -76,9 +77,18 @@ jobs:
       # ---------------------------
       - name: Get Ingress Public IP
         run: |
-          IP=$(kubectl get ingress "$INGRESS_NAME" -n "$INGRESS_NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          set -e
+          IP=$(kubectl get ingress "$INGRESS_NAME" -n "$INGRESS_NAMESPACE" \
+            -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+          if [ -z "$IP" ]; then
+            echo "❌ Ingress IP not ready"
+            exit 1
+          fi
+
           echo "INGRESS_IP=$IP" >> $GITHUB_ENV
           echo "Ingress IP => $IP"
+      
 
       # ---------------------------
       # Create / Update APIM Backend
