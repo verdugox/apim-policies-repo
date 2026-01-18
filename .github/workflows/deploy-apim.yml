@@ -162,7 +162,9 @@ jobs:
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID/policies/policy?api-version=2022-08-01" \
             --headers "Content-Type=application/vnd.ms-azure-apim.policy+xml" \
+            --headers "If-Match=*" \
             --body "@policies/cardops-policy.xml"
+      
 
       # ---------------------------
       # Done
