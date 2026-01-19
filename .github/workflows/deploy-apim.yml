@@ -78,6 +78,49 @@ jobs:
           kubectl config current-context
           kubectl get nodes
 
+            # ---------------------------
+      # Ensure Ingress Controller exists (SAFE)
+      # ---------------------------
+      - name: Ensure NGINX Ingress Controller
+        run: |
+          set -e
+
+          if kubectl get ns ingress-nginx >/dev/null 2>&1; then
+            echo "✅ ingress-nginx namespace already exists"
+          else
+            echo "🚀 Installing ingress-nginx controller"
+
+            helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+            helm repo update
+
+            helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+              --namespace ingress-nginx \
+              --create-namespace \
+              --set controller.service.type=LoadBalancer
+          fi
+
+      # ---------------------------
+      # Wait for Ingress Controller IP
+      # ---------------------------
+      - name: Wait for Ingress Controller IP
+        run: |
+          echo "⏳ Waiting for Ingress Controller external IP..."
+
+          for i in {1..30}; do
+            IP=$(kubectl get svc ingress-nginx-controller \
+              -n ingress-nginx \
+              -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+            if [ -n "$IP" ]; then
+              echo "✅ Ingress Controller IP: $IP"
+              break
+            fi
+
+            echo "⏳ Still waiting..."
+            sleep 10
+          done
+
+
 
       # ---------------------------
       # Get Ingress Public IP
