@@ -123,24 +123,21 @@ jobs:
 
 
       # ---------------------------
-      # Get Ingress Public IP
+      # Get Ingress Controller IP
       # ---------------------------
-      - name: Get Ingress Public IP
+      - name: Get Ingress Controller IP
         run: |
-          set -e
-
-          IP=$(kubectl get ingress "$INGRESS_NAME" -n "$INGRESS_NAMESPACE" \
+          IP=$(kubectl get svc ingress-nginx-controller \
+            -n ingress-nginx \
             -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
           if [ -z "$IP" ]; then
-            echo "❌ Ingress IP not ready"
+            echo "❌ Ingress Controller IP not ready"
             exit 1
           fi
 
           echo "INGRESS_IP=$IP" >> $GITHUB_ENV
-          echo "Ingress IP => $IP"
-      
-      
+          echo "Ingress Controller IP => $IP"
 
       # ---------------------------
       # Create / Update APIM Backend
