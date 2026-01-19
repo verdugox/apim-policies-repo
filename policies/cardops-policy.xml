@@ -4,9 +4,9 @@
 
         <rate-limit calls="100" renewal-period="60" />
 
-        <!-- SOLO reescribir para POST -->
+        <!-- SOLO reescribe para POST -->
         <choose>
-            <when condition="@(context.Request.Method == 'POST')">
+            <when condition="@(context.Request.Method == &quot;POST&quot;)">
                 <rewrite-uri template="/api/transactions" />
             </when>
         </choose>
