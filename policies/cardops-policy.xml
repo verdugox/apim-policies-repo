@@ -4,12 +4,10 @@
 
         <rate-limit calls="100" renewal-period="60" />
 
-        <!-- SOLO reescribe para POST -->
-        <choose>
-            <when condition="@(context.Request.Method == &quot;POST&quot;)">
-                <rewrite-uri template="/api/transactions" />
-            </when>
-        </choose>
+        <!-- SOLO reescribir cuando sea POST -->
+        <rewrite-uri
+                template="/api/transactions"
+                condition="@(context.Request.Method == &quot;POST&quot;)" />
 
         <set-backend-service backend-id="aks-ingress-backend" />
     </inbound>
