@@ -216,6 +216,38 @@ jobs:
               }
             }"
 
+      - name: Create / Update APIM Product
+        run: |
+          az rest --method PUT \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/products/cardops-product?api-version=2022-08-01" \
+            --body '{
+              "properties": {
+                "displayName": "CardOps Product",
+                "description": "Producto para CardOps API",
+                "subscriptionRequired": true,
+                "approvalRequired": false,
+                "subscriptionsLimit": 100,
+                "state": "published"
+              }
+            }'
+
+      - name: Link API to Product
+        run: |
+          az rest --method PUT \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/products/cardops-product/apis/$APIM_API_ID?api-version=2022-08-01"
+          
+      - name: Create Subscription
+        run: |
+          az rest --method PUT \
+            --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/subscriptions/cardops-subscription?api-version=2022-08-01" \
+            --body '{
+              "properties": {
+                "displayName": "CardOps Default Subscription",
+                "scope": "/products/cardops-product",
+                "state": "active"
+              }
+            }'
+          
 
       # ---------------------------
       - name: Debug policy file
