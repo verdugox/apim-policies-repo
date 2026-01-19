@@ -144,7 +144,7 @@ jobs:
       # ---------------------------
       - name: Create/Update APIM Backend (aks-ingress-backend)
         run: |
-          BACKEND_URL="http://$INGRESS_IP"
+          BACKEND_URL="http://$INGRESS_IP/cardops"
 
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/backends/aks-ingress-backend?api-version=2022-08-01" \
