@@ -54,12 +54,10 @@ jobs:
           echo "SUBSCRIPTION_ID=$SUBSCRIPTION_ID" >> $GITHUB_ENV
 
       # ---------------------------
-      # Get kubeconfig via REST (NO az aks get-credentials)
+      # Get AKS kubeconfig via REST
       # ---------------------------
-      - name: Get AKS kubeconfig via REST
+      - name: Get AKS kubeconfig
         run: |
-          set -e
-
           az rest \
             --method POST \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ContainerService/managedClusters/$AKS_NAME/listClusterUserCredential?api-version=2023-07-01" \
@@ -67,9 +65,53 @@ jobs:
             -o tsv | base64 --decode > kubeconfig
 
           echo "KUBECONFIG=$PWD/kubeconfig" >> $GITHUB_ENV
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+
+      # ---------------------------
+      # Install ingress-nginx (IDEMPOTENT)
+      # ---------------------------
+      - name: Install ingress-nginx
+        run: |
+          if kubectl get ns ingress-nginx >/dev/null 2>&1; then
+            echo "ingress-nginx already exists"
+          else
+            helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+            helm repo update
+
+            helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+              --namespace ingress-nginx \
+              --create-namespace \
+              --set controller.service.type=LoadBalancer
+          fi
+
+      # ---------------------------
+      # Wait for Ingress Controller IP
+      # ---------------------------
+      - name: Wait for ingress controller IP
+        run: |
+          for i in {1..30}; do
+            IP=$(kubectl get svc ingress-nginx-controller \
+              -n ingress-nginx \
+              -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+            if [ -n "$IP" ]; then
+              echo "INGRESS_IP=$IP" >> $GITHUB_ENV
+              echo "Ingress Controller IP => $IP"
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "Ingress Controller IP not ready"
+          exit 1
           
           
-            # ---------------------------
+      # ---------------------------
       # Verify kubectl context (IMPORTANT)
       # ---------------------------
       - name: Verify AKS access
@@ -78,38 +120,17 @@ jobs:
           kubectl config current-context
           kubectl get nodes
 
-      
-
-      # ---------------------------
-      # Get Ingress Public IP
-      # ---------------------------
-      - name: Get Ingress Public IP
-        run: |
-          set -e
-
-          IP=$(kubectl get ingress "$INGRESS_NAME" -n "$INGRESS_NAMESPACE" \
-            -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-
-          if [ -z "$IP" ]; then
-            echo "❌ Ingress IP not ready"
-            exit 1
-          fi
-
-          echo "INGRESS_IP=$IP" >> $GITHUB_ENV
-          echo "Ingress IP => $IP"
 
       # ---------------------------
       # Create / Update APIM Backend
       # ---------------------------
-      - name: Create/Update APIM Backend (aks-ingress-backend)
+      - name: Create APIM Backend
         run: |
-          BACKEND_URL="http://$INGRESS_IP/cardops"
-
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/backends/aks-ingress-backend?api-version=2022-08-01" \
             --body "{
               \"properties\": {
-                \"url\": \"$BACKEND_URL\",
+                \"url\": \"http://$INGRESS_IP\",
                 \"protocol\": \"http\"
               }
             }"
@@ -117,7 +138,7 @@ jobs:
       # ---------------------------
       # Create / Update API
       # ---------------------------
-      - name: Create/Update APIM API
+      - name: Create APIM API
         run: |
           az rest --method PUT \
             --uri "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$AZ_RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$APIM_API_ID?api-version=2022-08-01" \
