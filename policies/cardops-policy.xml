@@ -1,12 +1,8 @@
 <policies>
     <inbound>
         <base />
-
         <rate-limit calls="100" renewal-period="60" />
-
-        <!-- 🔑 NO reescribimos path -->
-        <!-- APIM ya envía /api/transactions -->
-
+        <rewrite-uri template="/api/transactions" />
         <set-backend-service backend-id="aks-ingress-backend" />
     </inbound>
 
