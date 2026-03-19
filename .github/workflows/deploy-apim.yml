@@ -292,7 +292,6 @@ jobs:
       - name: Smoke test - API path (should return 4xx/2xx, not timeout)
         run: |
           curl -i "http://$INGRESS_IP/api/transactions" || true
-      
 
       # ---------------------------
       # Done
