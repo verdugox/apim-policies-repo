@@ -283,7 +283,6 @@ jobs:
                 \"format\": \"rawxml\"
               }
             }"
-          
 
       - name: Smoke test from runner to Ingress (healthz)
         run: |
